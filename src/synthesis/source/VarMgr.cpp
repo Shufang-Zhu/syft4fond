@@ -254,6 +254,10 @@ CUDD::BDD VarMgr::output_cube() const {
   return mgr_->computeCube(output_variables_);
 }
 
+CUDD::BDD VarMgr::state_cube(size_t automaton_id) const {
+  return mgr_->computeCube(state_variables_[automaton_id]);
+}
+
 std::vector<int> VarMgr::make_eval_vector(
     std::size_t automaton_id, const std::vector<int>& state_vector) const {
   std::vector<int> eval_vector(total_variable_count(), 0);

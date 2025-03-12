@@ -154,6 +154,7 @@ class SymbolicStateDfa {
 
   SymbolicStateDfa restriction(const CUDD::BDD& invalid_states) const;
 
+
 }; 
 } 
 #endif // SYMBOLIC_STATE_DFA_H

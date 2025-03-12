@@ -198,6 +198,8 @@ class VarMgr {
    */
   CUDD::BDD output_cube() const;
 
+  CUDD::BDD state_cube(size_t automaton_id) const;
+
   /**
    * \brief Creates a valid input to CUDD::BDD::Eval.
    *

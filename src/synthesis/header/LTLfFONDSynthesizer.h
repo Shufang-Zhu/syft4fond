@@ -36,6 +36,8 @@ namespace Syft {
             std::vector<double> running_times_;
 
             std::string parse_goal(const Domain& domain, std::string& ltlf_goal) const;
+            SynthesisResult run_no_dependency();
+            SynthesisResult run_dependency();
 
         public:
             LTLfFONDSynthesizer(
@@ -45,7 +47,7 @@ namespace Syft {
                 const std::string& ltlf_file
             );
 
-            SynthesisResult run();
+            SynthesisResult run(bool dependency);
 
             std::vector<double> get_running_times() const {
                 return running_times_;

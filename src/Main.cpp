@@ -20,27 +20,32 @@ int main(int argc, char** argv) {
     CLI::App app {
         "syn: a tool for LTLf reactive synthesis in FOND planning domains"
     };
+    app.set_help_all_flag("--help-all", "Expand all help");
+
 
     string domain_file, problem_file, goal_file, out_file;
     bool interactive = false;
 
-    CLI::Option* domain_file_opt =
-        app.add_option("-d,--domain-file", domain_file, "Path to PDDL domain file") ->
+    // CLI::Option* domain_file_opt =
+    app.add_option("-d,--domain-file", domain_file, "Path to PDDL domain file") ->
         required() -> check(CLI::ExistingFile);
 
-    CLI::Option* problem_file_opt =
-        app.add_option("-p,--problem-file", problem_file, "Path to PDDL problem file") ->
+    // CLI::Option* problem_file_opt =
+    app.add_option("-p,--problem-file", problem_file, "Path to PDDL problem file") ->
         required() -> check(CLI::ExistingFile);
 
-    CLI::Option* goal_file_opt =
-        app.add_option("-g,--goal-file", goal_file, "Path to LTLf goal file") ->
+    // CLI::Option* goal_file_opt =
+    app.add_option("-g,--goal-file", goal_file, "Path to LTLf goal file") ->
         required() -> check(CLI::ExistingFile);
 
     // CLI::Option* interactive_opt =
         // app.add_option("-i,--interactive", interactive, "Executes the synthesized strategy in interactive mode");
 
-    CLI::Option* out_file_opt =
-        app.add_option("-o,--out-file", out_file, "Path to output .csv file. Stores:\n1. PDDL domain file\n2. PDDL problem file\n3. Run time (secs)\n4. PDDL parsing (secs)\n5. PDDL2DFA (secs)\n6. Synthesis (secs)\n7. Realizability (0,1)");
+    // CLI::Option* out_file_opt =
+    app.add_option("-o,--out-file", out_file, "Path to output .csv file. Stores:\n1. PDDL domain file\n2. PDDL problem file\n3. Run time (secs)\n4. PDDL parsing (secs)\n5. PDDL2DFA (secs)\n6. Synthesis (secs)\n7. Realizability (0,1)");
+
+    bool dependency = false;
+    app.add_flag("--dependency", dependency, "Utilize dependency (default: false)");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -50,9 +55,9 @@ int main(int argc, char** argv) {
         var_mgr,
         domain_file, 
         problem_file,
-        goal_file); 
+        goal_file);
 
-    Syft::SynthesisResult result = synthesizer.run();
+    Syft::SynthesisResult result = synthesizer.run(dependency);
 
     auto running_times = synthesizer.get_running_times();
     auto run_time = sumVec(running_times);

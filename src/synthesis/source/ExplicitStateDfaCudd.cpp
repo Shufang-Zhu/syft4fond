@@ -15,6 +15,8 @@ namespace Syft {
                                                  const ExplicitStateDfa &explicit_dfa) {
 
     std::size_t initial_state = explicit_dfa.initial_state();
+    std::size_t sink_state = explicit_dfa.initial_state();
+    bool sink_state_exist = false;
     std::vector<std::size_t> final_states = explicit_dfa.final_states();
     std::unordered_map<std::size_t, std::vector<std::pair<CUDD::BDD, std::size_t>>> transition_function;
 
@@ -31,12 +33,20 @@ namespace Syft {
         }
       }
       transition_function[i] = outgoings;
+      if (transition_function[i].size() == 1) {
+        if ((transition_function[i][0].first == var_mgr->cudd_mgr()->bddOne()) & (transition_function[i][1].second == i)) {
+          sink_state = i;
+          sink_state_exist = true;
+        }
+      }
     }
 
     assert(state_count == transition_function.size());
 
     ExplicitStateDfaCudd dfa(std::move(var_mgr));
     dfa.initial_state_ = initial_state;
+    dfa.sink_state_ = sink_state;
+    dfa.sink_state_exist_ = sink_state_exist;
     dfa.state_count_ = state_count;
     dfa.final_states_ = std::move(final_states);
     dfa.transition_function_ = std::move(transition_function);
@@ -70,6 +80,38 @@ namespace Syft {
   std::unordered_map<std::size_t, std::vector<std::pair<CUDD::BDD, std::size_t>>> ExplicitStateDfaCudd::transition_function() const {
     return transition_function_;
   }
+
+  std::vector<std::pair<CUDD::BDD, std::size_t> > ExplicitStateDfaCudd::get_outgoing_transitions(std::size_t state) const {
+    return transition_function_.at(state);
+  }
+
+  std::vector<std::pair<CUDD::BDD, std::size_t> > ExplicitStateDfaCudd::get_nonsink_outgoing_transitions(std::size_t state) const {
+    if (sink_state_exist_) {
+      std::vector<std::pair<CUDD::BDD, std::size_t> > transitions;
+      for(auto transition : transition_function_.at(state)) {
+        if(transition.second != sink_state_) {
+          transitions.push_back(transition);
+        }
+      }
+      return transitions;
+    }
+    return transition_function_.at(state);
+  }
+
+  std::vector<std::pair<CUDD::BDD, std::size_t> > ExplicitStateDfaCudd::get_incoming_transitions(std::size_t state) const {
+    std::vector<std::pair<CUDD::BDD, std::size_t> > transitions;
+    for (const auto& [curr, vec] : transition_function_) {
+      for (const auto& [condition, succ] : vec) {
+        if (succ == state) {
+          std::pair<CUDD::BDD, std::size_t> edge = std::make_pair(condition, curr);
+          transitions.push_back(edge);
+        }
+      }
+    }
+    return transitions;
+  }
+
+
 
   std::size_t ExplicitStateDfaCudd::bdd_nodes_count() const {
     std::vector<CUDD::BDD> allBDDs;

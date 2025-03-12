@@ -11,7 +11,84 @@ namespace Syft {
         const std::string& goal_file
     ) : var_mgr_(var_mgr), domain_file_(domain_file), init_file_(init_file), goal_file_(goal_file) {}
 
-    SynthesisResult LTLfFONDSynthesizer::run() {
+    SynthesisResult LTLfFONDSynthesizer::run(bool dependency) {
+        return dependency? run_dependency() : run_no_dependency();
+    }
+
+    SynthesisResult LTLfFONDSynthesizer::run_no_dependency() {
+        // 1. construct DFA of planning domain
+        std::cout << "[syn] Transforming PDDL into DFA...";
+        Stopwatch pddl2dfa;
+        pddl2dfa.start();
+
+        Domain domain(var_mgr_, domain_file_, init_file_);
+        SymbolicStateDfa domain_sdfa = domain.to_symbolic();
+
+        auto pddl2dfa_t = pddl2dfa.stop().count() / 1000.0;
+        running_times_.push_back(pddl2dfa_t);
+        std::cout << "Done [" << pddl2dfa_t << " s]" << std::endl;
+
+        domain.print_domain();
+
+        // 2. construct DFA of LTLf formula
+        // i. read LTLf goal from file
+        std::cout << "[syn] Transforming LTLf goal into DFA..." << std::flush;
+        Stopwatch ltlf2dfa;
+        ltlf2dfa.start();
+
+        std::ifstream ltlf_stream(goal_file_);
+        std::string ltlf_goal;
+        std::getline(ltlf_stream, ltlf_goal);
+
+        // ii. parse LTLf goal
+        ltlf_goal = parse_goal(domain, ltlf_goal);
+
+        // iii. LTLf -> DFA
+        ExplicitStateDfaMona goal_mona_dfa = ExplicitStateDfaMona::dfa_of_formula(ltlf_goal);
+        ExplicitStateDfa goal_dfa = ExplicitStateDfa::from_dfa_mona(var_mgr_, goal_mona_dfa);
+
+
+        // ExplicitStateDfaCudd goal_dfa_cudd = ExplicitStateDfaCudd::from_explicit_dfa(var_mgr_, goal_dfa);
+        // std::cout << "\n---MONA DFA: \n";
+        // goal_mona_dfa.dfa_print();
+        // std::cout << "\n--- CUDD DFA: \n";
+        // goal_dfa_cudd.dfa_print();
+
+        // LTLf synthesis with dependencies project
+        // TODO.
+        // 3. ExplicitStateDfaCudd composed_dfa_cudd = DependencyComposition::get_cudd_dfa(domain_sdfa, goal_cudd_dfa):
+        // 4. SymbolicStateDfa goal_sdfa = SymbolicStateDfa::from_explicit_cudd(composed_cudd_dfa);
+        // Q1. How to handle fluents as agent variables?
+        SymbolicStateDfa goal_sdfa = SymbolicStateDfa::from_explicit(goal_dfa);
+        auto ltlf2dfa_t = ltlf2dfa.stop().count() / 1000.0;
+        running_times_.push_back(ltlf2dfa_t);
+        std::cout << "Done [" <<  ltlf2dfa_t << " s]" << std::endl;
+
+        // 3. solve game
+        std::cout << "[syn] Synthesisizing a strategy..." << std::flush;
+        Stopwatch synthesis;
+        synthesis.start();
+
+        std::vector<SymbolicStateDfa> game_sdfas = {domain_sdfa, goal_sdfa};
+        SymbolicStateDfa dfa_game = SymbolicStateDfa::domain_compose(game_sdfas);
+        CUDD::BDD invariant_bdd = domain.get_invariants_bdd();
+
+        ReachabilitySynthesizer synthesizer(
+            dfa_game,
+            Player::Agent,
+            Player::Agent,
+            dfa_game.final_states(),
+            invariant_bdd
+        );
+        SynthesisResult result = synthesizer.run();
+        auto synthesis_t = synthesis.stop().count() / 1000.0;
+        running_times_.push_back(synthesis_t);
+        std::cout << "Done [" << synthesis_t << " s]" <<  std::endl;
+
+        return result;
+    }
+
+    SynthesisResult LTLfFONDSynthesizer::run_dependency() {
         // 1. construct DFA of planning domain
         std::cout << "[syn] Transforming PDDL into DFA...";
         Stopwatch pddl2dfa;

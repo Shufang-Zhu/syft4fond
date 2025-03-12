@@ -18,7 +18,7 @@
 #include<cuddObj.hh>
 #include"SymbolicStateDfa.h"
 #include"Domain.h"
-#include"spotparser.h"
+
 #include"ReachabilitySynthesizer.h"
 #include"Stopwatch.h"
 

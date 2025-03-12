@@ -41,7 +41,7 @@ namespace Syft {
                 bool interactive
             );
 
-            virtual Syft::SynthesisResult run() final;
+            SynthesisResult run();
 
             void interactive(
                 const Domain& domain,

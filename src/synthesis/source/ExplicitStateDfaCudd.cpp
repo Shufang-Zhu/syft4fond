@@ -86,12 +86,12 @@ namespace Syft {
                          std::to_string(initial_state())
                   << "\n";
 
-    std::cout << "Computed automaton: ";
+    std::cout << "Computed automaton: \n";
 
     std::cout << "DFA with free variables: ";
 
     for (int i = 0; i < variable_names().size(); i++) {
-      std::cout << variable_names()[i] << " " << var_mgr()->name_to_variable(variable_names()[i]);
+      std::cout << variable_names()[i] << " ";
     }
 
     std::cout << "\nInitial state: " << initial_state()

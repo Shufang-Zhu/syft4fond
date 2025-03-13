@@ -28,7 +28,7 @@ namespace Syft {
       for (std::size_t j = 0; j < state_count; ++j) {
         CUDD::BDD transition = transition_function_add[i].BddInterval(j, j);
         if (transition != var_mgr->cudd_mgr()->bddZero()) {
-          std::pair<CUDD::BDD, std::size_t> edge = std::make_pair(transition, j);
+          Transition edge = std::make_pair(transition, j);
           outgoings.push_back(edge);
         }
       }
@@ -56,6 +56,21 @@ namespace Syft {
 
   }
 
+  ExplicitStateDfaCudd ExplicitStateDfaCudd::from_defined_dfa(std::shared_ptr<VarMgr> var_mgr, size_t initial_state, size_t sink_state, bool sink_state_exist, size_t state_count, std::vector<size_t> final_states, std::unordered_map<std::size_t, std::vector<std::pair<CUDD::BDD, std::size_t> > > transition_function, std::vector<std::string> variable_names) {
+
+    ExplicitStateDfaCudd dfa(std::move(var_mgr));
+    dfa.initial_state_ = initial_state;
+    dfa.sink_state_ = sink_state;
+    dfa.sink_state_exist_ = sink_state_exist;
+    dfa.state_count_ = state_count;
+    dfa.final_states_ = std::move(final_states);
+    dfa.transition_function_ = std::move(transition_function);
+    dfa.variable_names_ = std::move(variable_names);
+
+    return dfa;
+  }
+
+
   std::shared_ptr<VarMgr> ExplicitStateDfaCudd::var_mgr() const {
     return var_mgr_;
   }
@@ -63,6 +78,15 @@ namespace Syft {
   std::size_t ExplicitStateDfaCudd::initial_state() const {
     return initial_state_;
   }
+
+  std::size_t ExplicitStateDfaCudd::sink_state() const {
+    return sink_state_;
+  }
+
+  bool ExplicitStateDfaCudd::sink_state_exist() const {
+    return sink_state_exist_;
+  }
+
 
   std::size_t ExplicitStateDfaCudd::state_count() const {
     return state_count_;
@@ -81,13 +105,13 @@ namespace Syft {
     return transition_function_;
   }
 
-  std::vector<std::pair<CUDD::BDD, std::size_t> > ExplicitStateDfaCudd::get_outgoing_transitions(std::size_t state) const {
+  std::vector<ExplicitStateDfaCudd::Transition> ExplicitStateDfaCudd::get_outgoing_transitions(std::size_t state) const {
     return transition_function_.at(state);
   }
 
-  std::vector<std::pair<CUDD::BDD, std::size_t> > ExplicitStateDfaCudd::get_nonsink_outgoing_transitions(std::size_t state) const {
+  std::vector<ExplicitStateDfaCudd::Transition> ExplicitStateDfaCudd::get_nonsink_outgoing_transitions(std::size_t state) const {
     if (sink_state_exist_) {
-      std::vector<std::pair<CUDD::BDD, std::size_t> > transitions;
+      std::vector<Transition> transitions;
       for(auto transition : transition_function_.at(state)) {
         if(transition.second != sink_state_) {
           transitions.push_back(transition);
@@ -98,12 +122,12 @@ namespace Syft {
     return transition_function_.at(state);
   }
 
-  std::vector<std::pair<CUDD::BDD, std::size_t> > ExplicitStateDfaCudd::get_incoming_transitions(std::size_t state) const {
-    std::vector<std::pair<CUDD::BDD, std::size_t> > transitions;
+  std::vector<ExplicitStateDfaCudd::Transition> ExplicitStateDfaCudd::get_incoming_transitions(std::size_t state) const {
+    std::vector<Transition> transitions;
     for (const auto& [curr, vec] : transition_function_) {
       for (const auto& [condition, succ] : vec) {
         if (succ == state) {
-          std::pair<CUDD::BDD, std::size_t> edge = std::make_pair(condition, curr);
+          Transition edge = std::make_pair(condition, curr);
           transitions.push_back(edge);
         }
       }
@@ -125,7 +149,7 @@ namespace Syft {
 
   void ExplicitStateDfaCudd::dfa_print() const {
     std::cout << "Number of states " +
-                         std::to_string(initial_state())
+                         std::to_string(state_count())
                   << "\n";
 
     std::cout << "Computed automaton: \n";
@@ -154,26 +178,27 @@ namespace Syft {
 
     for (int i = 0; i < state_count(); i++) {
       std::vector<std::pair<CUDD::BDD, std::size_t>> transitions = transition_function()[i];
+      // std::cout << transitions.size() << "\n";
       for (auto transition : transitions) {
-
-        CUDD::BDD condition = transition.first;
-        int var_num = Cudd_ReadSize(condition.manager());
-        assert(var_num == var_mgr()->get_index_to_name().size());
-        std::vector<std::vector<uint8_t>> cubes= whitemech::lydia::get_cubes(condition, var_num);
-        for(auto cube : cubes) {
-          std::cout << "State: " << i << ": ";
-          for (auto var_name: variable_names()) {
-            int var_index = var_mgr()->name_to_variable(var_name).NodeReadIndex();
-            int var_value = static_cast<int>(cube[var_index]);
-            if (var_value == 2) {
-              std::cout << "X";
-            } else {
-              std::cout << var_value;
-            }
-          }
-          std::cout << " -> state " << transition.second << "\n";
-        }
-
+        std::cout << "State: " << i << ": ";
+        std::cout << transition.first << " -> " << transition.second << "\n";
+        // CUDD::BDD condition = transition.first;
+        // int var_num = Cudd_ReadSize(condition.manager());
+        // assert(var_num == var_mgr()->get_index_to_name().size());
+        // std::vector<std::vector<uint8_t>> cubes= whitemech::lydia::get_cubes(condition, var_num);
+        // for(auto cube : cubes) {
+        //   std::cout << "State: " << i << ": ";
+        //   for (auto var_name: variable_names()) {
+        //     int var_index = var_mgr()->name_to_variable(var_name).NodeReadIndex();
+        //     int var_value = static_cast<int>(cube[var_index]);
+        //     if (var_value == 2) {
+        //       std::cout << "X";
+        //     } else {
+        //       std::cout << var_value;
+        //     }
+        //   }
+        //   std::cout << " -> state " << transition.second << "\n";
+        // }
       }
     }
   }

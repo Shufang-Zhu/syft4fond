@@ -32,6 +32,15 @@ namespace Syft {
 
       static ExplicitStateDfaCudd from_explicit_dfa(std::shared_ptr<Syft::VarMgr> var_mgr, const ExplicitStateDfa &explicit_dfa);
 
+      static ExplicitStateDfaCudd from_defined_dfa(std::shared_ptr<VarMgr> var_mgr,
+                                                   size_t initial_state,
+                                                   size_t sink_state,
+                                                   bool sink_state_exist,
+                                                   size_t state_count,
+                                                   std::vector<size_t> final_states,
+                                                   std::unordered_map<std::size_t, std::vector<std::pair<CUDD::BDD, std::size_t> > > transition_function,
+                                                   std::vector<std::string> variable_names);
+
       std::shared_ptr<VarMgr> var_mgr() const;
 
       std::size_t initial_state() const;
@@ -48,7 +57,9 @@ namespace Syft {
 
       std::size_t bdd_nodes_count() const;
 
-      std::unordered_map<std::size_t, std::vector<std::pair<CUDD::BDD, std::size_t>>> transition_function() const;
+      typedef std::pair<CUDD::BDD, std::size_t> Transition;
+
+      std::unordered_map<std::size_t, std::vector<Transition>> transition_function() const;
 
       std::vector<std::pair<CUDD::BDD, std::size_t>> get_incoming_transitions(std::size_t state) const;
 

@@ -1,6 +1,7 @@
 #include"LTLfFONDSynthesizer.h"
 #include"String_utilities.h"
 #include"ExplicitStateDfaCudd.h"
+#include"DependencyComposition.h"
 #include"spotparser.h"
 
 namespace Syft {
@@ -129,7 +130,11 @@ namespace Syft {
 
         // LTLf synthesis with dependencies project
         // TODO.
-        // 3. ExplicitStateDfaCudd composed_dfa_cudd = DependencyComposition::get_cudd_dfa(domain_sdfa, goal_cudd_dfa):
+        std::cout << "\n--- Composition: \n";
+        DependencyComposition composition(domain_sdfa, goal_dfa_cudd);
+        ExplicitStateDfaCudd composed_dfa_cudd = composition.compose();
+        std::cout << "\n--- Composed DFA: \n";
+        composed_dfa_cudd.dfa_print();
         // 4. SymbolicStateDfa goal_sdfa = SymbolicStateDfa::from_explicit_cudd(composed_cudd_dfa);
         // Q1. How to handle fluents as agent variables?
         SymbolicStateDfa goal_sdfa = SymbolicStateDfa::from_explicit(goal_dfa);

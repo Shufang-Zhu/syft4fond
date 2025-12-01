@@ -10,9 +10,9 @@
 #include<string>
 #include<stdlib.h>
 #include<math.h>
-#include<boost/algorithm/string/predicate.hpp>
+// #include<boost/algorithm/string/predicate.hpp>
 #include"VarMgr.h"
-#include"ExplicitStateDfaMona.h"
+// #include"ExplicitStateDfaMona.h"
 #include"ExplicitStateDfa.h"
 #include"SymbolicStateDfa.h"
 #include"ReachabilitySynthesizer.h"

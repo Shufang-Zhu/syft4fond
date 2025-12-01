@@ -1,4 +1,8 @@
 #include"LTLfFONDSynthesizer.h"
+#include <spot/tl/parse.hh>
+#include <spot/twaalgos/ltlf2dfa.hh>
+#include <spot/twa/twagraph.hh>
+#include "String_utilities.h"
 
 namespace Syft {
     LTLfFONDSynthesizer::LTLfFONDSynthesizer(
@@ -35,10 +39,17 @@ namespace Syft {
 
         // ii. parse LTLf goal
         ltlf_goal = parse_goal(domain, ltlf_goal);
+        spot::formula pf = spot::parse_formula(ltlf_goal);
+        // std::cout << pf << std::endl;
+
+
+        spot::bdd_dict_ptr bdd_dict_ptr = spot::make_bdd_dict();
+        spot::ltlf_translator translator(bdd_dict_ptr);
+        spot::mtdfa_ptr mtdfa = translator.ltlf_to_mtdfa(pf, true);
 
         // iii. LTLf -> DFA
-        ExplicitStateDfaMona goal_mona_dfa = ExplicitStateDfaMona::dfa_of_formula(ltlf_goal);
-        ExplicitStateDfa goal_dfa = ExplicitStateDfa::from_dfa_mona(var_mgr_, goal_mona_dfa);
+        // ExplicitStateDfaMona goal_mona_dfa = ExplicitStateDfaMona::dfa_of_formula(ltlf_goal);
+        ExplicitStateDfa goal_dfa = ExplicitStateDfa::from_dfa_spot(var_mgr_, bdd_dict_ptr, mtdfa);
         SymbolicStateDfa goal_sdfa = SymbolicStateDfa::from_explicit(goal_dfa);
 
         // LTLf synthesis with dependencies project
@@ -92,7 +103,9 @@ namespace Syft {
 
         // copy is needed because of mismatch between SPOT's and Lydia's syntax
         std::string copy = goal;
-        boost::algorithm::replace_all(copy, "true", "tt");
+        // boost::algorithm::replace_all(copy, "true", "tt");
+        copy = replace_all(copy, "true", "tt");
+
     
         // parse formula with spot parser to get props
         // formula spot_intent = parse_formula(intent.c_str());

@@ -3,6 +3,8 @@
 */
 
 #include"Domain.h"
+#include "String_utilities.h"
+#include <spot/tl/parse.hh>
 
 namespace Syft {
 
@@ -13,28 +15,28 @@ namespace Syft {
     ): var_mgr_(var_mgr) {
         // enables variables dynamic reordering for performance
         var_mgr_->cudd_mgr() -> AutodynEnable();
-        // TODO. Add configuration to enable reordering reporting? 
+        // TODO. Add configuration to enable reordering reporting?
         // var_mgr_->cudd_mgr() -> EnableReorderingReporting();
 
         // parse domain and problem PDDL to generate output.sas file
-        std::string translate_command = "./../../submodules/translate.py 0 " + domain_pddl + " " + problem_pddl;
+        std::string translate_command = "python3 ../../submodules/translate.py 0 " + domain_pddl + " " + problem_pddl;
         system(translate_command.c_str());
 
         // read output.sas to generate data members
-        parse_sas(); 
+        parse_sas();
 
         // generate invariants in three files
         // 1. predicate file
         // 2. objects file
         // 3. invariants file
-        std::string invariants_command = "./../../submodules/invariant_finder.py " + domain_pddl + " " + problem_pddl;
+        std::string invariants_command = "python3 ../../submodules/invariant_finder.py " + domain_pddl + " " + problem_pddl;
         system(invariants_command.c_str());
 
         // debug
-        // for (const auto& p : var_to_id) std::cout << "Var: " << p.first << ". ID: " << p.second << std::endl; 
+        // for (const auto& p : var_to_id) std::cout << "Var: " << p.first << ". ID: " << p.second << std::endl;
 
         // generate grounded_invs file
-        std::string ground_invariants_command = "./../../submodules/invariant_grounder.py";
+        std::string ground_invariants_command = "python3 ../../submodules/invariant_grounder.py";
         system(ground_invariants_command.c_str());
 
         // grounds invariants
@@ -45,16 +47,26 @@ namespace Syft {
         std::ifstream inv_input_stream("grounded_invs.txt");
         std::string inv_line;
         while (std::getline(inv_input_stream, inv_line)) {
-            boost::replace_all(inv_line, "(", "_");
-            boost::replace_all(inv_line, ")", "_");
-            boost::replace_all(inv_line, " ", "");
-            boost::replace_all(inv_line, ",", "_");
-            boost::replace_all(inv_line, "-", "_");
-            boost::to_lower(inv_line);
+            // boost::replace_all(inv_line, "(", "_");
+            inv_line = replace_all(inv_line, "(", "_");
+            // boost::replace_all(inv_line, ")", "_");
+            inv_line = replace_all(inv_line, ")", "_");
+            // boost::replace_all(inv_line, " ", "");
+            inv_line = replace_all(inv_line, " ", "");
+            // boost::replace_all(inv_line, ",", "_");
+            inv_line = replace_all(inv_line, ",", "_");
+            // boost::replace_all(inv_line, "-", "_");
+            inv_line = replace_all(inv_line, "-", "_");
+            // boost::to_lower(inv_line);
+            inv_line = to_lower_copy(inv_line);
             // std::cout << inv_line << std::endl;
             std::vector<std::string> inv_vec;
-            boost::split(inv_vec, inv_line, boost::is_any_of(";"));
-            for (auto& atom : inv_vec) boost::trim_if(atom, boost::is_any_of("_"));
+            // boost::split(inv_vec, inv_line, boost::is_any_of(";"));
+            inv_vec = split(inv_line, ";");
+            for (auto& atom : inv_vec) {
+                // boost::trim_if(atom, boost::is_any_of("_"));
+                atom = trim_if(atom, is_any_of("_"));
+            }
 
             // debug
             // std::cout << "Invariant: " << std::flush;
@@ -75,56 +87,69 @@ namespace Syft {
             std::string line;
             while (std::getline(sas_input_stream, line)) {
                 // std::cout << line << std::endl;
-                if (boost::starts_with(line, "Atom")) {
+                if (starts_with(line, "Atom")) {
                     std::string var = line.substr(5);
-                    boost::replace_all(var, "(", "_");
-                    boost::replace_all(var, ")", "_");
-                    boost::replace_all(var, " ", "");
-                    boost::replace_all(var, ",", "_");
-                    boost::replace_all(var, "-", "_");
-                    boost::trim_if(var, boost::is_any_of("_"));
-                    boost::to_lower(var);
+                    // boost::replace_all(var, "(", "_");
+                    var = replace_all(var, "(", "_");
+                    // boost::replace_all(var, ")", "_");
+                    var = replace_all(var, ")", "_");
+                    // boost::replace_all(var, " ", "");
+                    var = replace_all(var, " ", "");
+                    // boost::replace_all(var, ",", "_");
+                    var = replace_all(var, ",", "_");
+                    // boost::replace_all(var, "-", "_");
+                    var = replace_all(var, "-", "_");
+                    // boost::trim_if(var, boost::is_any_of("_"));
+                    var = trim_if(var, is_any_of("_"));
+                    // boost::to_lower(var);
+                    var = to_lower_copy(var);
                     vars_.push_back(var);
-                } else if (boost::starts_with(line, "begin_state")) { // reads initial state information
+                } else if (starts_with(line, "begin_state")) { // reads initial state information
                     while (line != "end_state") {
                         std::getline(sas_input_stream, line);
                         // in .sas 0 is "true" and 1 is "false"
                         // to match LydiaSyft: 0->1 and 1->0 in init state
                         if (line == "0") init_state_.push_back(1);
-                        else if (line == "1") init_state_.push_back(0); 
+                        else if (line == "1") init_state_.push_back(0);
                     }
-                } else if (boost::starts_with(line, "begin_operator")) { // reads action information
+                } else if (starts_with(line, "begin_operator")) { // reads action information
                     // adds nop dummy action
                     Action nop("nop_REACT_0", {}, {}, {}, {});
                     actions_.insert(nop);
-                    
+
                     std::string action_name;
                     std::unordered_set<int> pos_preconditions, neg_preconditions, add_list, delete_list;
                     while (line != "end_operator") {
                         std::getline(sas_input_stream, line);
-                        if (!((boost::starts_with(line, "  ")) || line == "end_operator")) {
+                        if (!((starts_with(line, "  ")) || line == "end_operator")) {
                             // action name
                             // preprocessing for compatibility with LydiaSyft's syntax
                             action_name = line;
-                            boost::replace_all(action_name, "-", "_");
-                            boost::replace_all(action_name, " ", "_");
-                            boost::to_lower(action_name);
-                            boost::replace_all(action_name, "detdup", "REACT");
+                            // boost::replace_all(action_name, "-", "_");
+                            action_name = replace_all(action_name, "-", "_");
+                            // boost::replace_all(action_name, " ", "_");
+                            action_name = replace_all(action_name, " ", "_");
+                            // boost::to_lower(action_name);
+                            action_name = to_lower_copy(action_name);
+                            // boost::replace_all(action_name, "detdup", "REACT");
+                            action_name = replace_all(action_name, "detdup", "REACT");
                             auto i = action_name.find("REACT_");
                             if (i == std::string::npos) action_name = action_name + "_REACT_0";
                             else {
                                 auto j = action_name.find("_", i+1);
                                 auto k = action_name.find("_", j+1);
                                 std::string react_id = action_name.substr(i, k-i);
-                                boost::replace_all(action_name, "_" + react_id, "");
+                                // boost::replace_all(action_name, "_" + react_id, "");
+                                action_name = replace_all(action_name, "_" + react_id, "");
                                 action_name = action_name + "_" + react_id;
                             }
                             // std::cout << "Current action name: " << action_name << std::endl;
-                        } else if (boost::starts_with(line, "  ")) {
-                            boost::trim(line);
+                        } else if (starts_with(line, "  ")) {
+                            // boost::trim(line);
+                            line = trim(line);
                             // std::cout << line << std::endl;
                             std::vector<std::string> substr_vec;
-                            boost::split(substr_vec, line, boost::is_any_of(" "));
+                            substr_vec = split(line);
                             int var = std::stoi(substr_vec[0].substr(1, substr_vec[0].size() - 2));
                             if (substr_vec.size() == 2) {
                                 // we are handling a precondition
@@ -141,11 +166,12 @@ namespace Syft {
                     Action new_action(action_name, pos_preconditions, neg_preconditions, add_list, delete_list);
                     // new_action.print();
                     actions_.insert(new_action);
-                } else if (boost::starts_with(line, "begin_goal")) { // reads goal information
+                } else if (starts_with(line, "begin_goal")) { // reads goal information
                     while (line != "end_goal") {
                         std::getline(sas_input_stream, line);
                         std::vector<std::string> substr_vec;
-                        boost::split(substr_vec, line, boost::is_any_of(" "));
+                        // boost::split(substr_vec, line, boost::is_any_of(" "));
+                        substr_vec = split(line, " ");
                         if (substr_vec.size() == 2) {
                             int var = std::stoi(substr_vec[0]);
                             if (substr_vec[1] == "0") pos_goal_list_.insert(var);
@@ -154,12 +180,12 @@ namespace Syft {
                     }
                 }
             }
-            // print_domain(); 
+            // print_domain();
         }
 
     SymbolicStateDfa Domain::to_ltlf_and_symbolic() {
 
-        std::pair<std::unordered_set<std::string>, std::unordered_set<std::string>> action_reaction_names 
+        std::pair<std::unordered_set<std::string>, std::unordered_set<std::string>> action_reaction_names
             = get_action_reaction_names();
 
         std::pair<std::string, std::string> agent_env_mutex_axioms = get_ltlf_action_reaction_vars(action_reaction_names.first, action_reaction_names.second);
@@ -179,7 +205,7 @@ namespace Syft {
         // std::cout << "Goal formula: " << ltlf_goal << std::endl;
         // std::cout << "Transition function formula: " << ltlf_trans << std::endl;
 
-        std::string pddl_ltlf = "(((" + ltlf_init + ") && (" + ltlf_trans + ")) -> " + "(" + ltlf_goal + "))";    
+        std::string pddl_ltlf = "(((" + ltlf_init + ") && (" + ltlf_trans + ")) -> " + "(" + ltlf_goal + "))";
 
 
         // debug
@@ -189,13 +215,17 @@ namespace Syft {
         // ltlf_goal_dfa.dfa_print();
         // ExplicitStateDfaMona ltlf_trans_dfa = ExplicitStateDfaMona::dfa_of_formula(ltlf_trans);
         // ltlf_trans_dfa.dfa_print();
-    
-        ExplicitStateDfaMona mona_dfa = ExplicitStateDfaMona::dfa_of_formula(pddl_ltlf);
+
+        // ExplicitStateDfaMona mona_dfa = ExplicitStateDfaMona::dfa_of_formula(pddl_ltlf);
+        spot::formula pf = spot::parse_formula(pddl_ltlf);
+        spot::bdd_dict_ptr bdd_dict_ptr = spot::make_bdd_dict();
+        spot::ltlf_translator translator(bdd_dict_ptr);
+        spot::mtdfa_ptr mtdfa = translator.ltlf_to_mtdfa(pf, true);
 
         // debug
-        mona_dfa.dfa_print();
+        // mona_dfa.dfa_print();
 
-        ExplicitStateDfa explicit_dfa = ExplicitStateDfa::from_dfa_mona(var_mgr_, mona_dfa);
+        ExplicitStateDfa explicit_dfa = ExplicitStateDfa::from_dfa_spot(var_mgr_, bdd_dict_ptr, mtdfa);
         SymbolicStateDfa domain_dfa = SymbolicStateDfa::from_explicit(explicit_dfa);
 
         // std::cout << "Done!" << std::endl;
@@ -226,7 +256,7 @@ namespace Syft {
         // define encoding for action and reaction vars
         std::unordered_map<std::string, std::string> action_name_to_ltlf;
         std::unordered_map<std::string, std::string> reaction_name_to_ltlf;
-    
+
         std::string agent_ltlf_mutex = "";
         std::string env_ltlf_mutex = "";
 
@@ -240,13 +270,13 @@ namespace Syft {
             }
             act_ltlf = "(" + act_ltlf.substr(0, act_ltlf.size()-4) + ")";
             action_name_to_ltlf.insert(std::make_pair(action_name, act_ltlf));
-            agent_ltlf_mutex += act_ltlf + " || "; 
+            agent_ltlf_mutex += act_ltlf + " || ";
             id_to_action_name_.insert(std::make_pair(act_int_id, action_name));
-            ++act_int_id; 
+            ++act_int_id;
         }
         agent_ltlf_mutex = agent_ltlf_mutex.substr(0, agent_ltlf_mutex.size() - 4);
         agent_ltlf_mutex = "(" + agent_ltlf_mutex + ")";
-        
+
         for (const auto& reaction_name : reaction_names) {
             std::vector<int> react_bin_id = to_bits(react_int_id, reaction_bits);
             std::string react_ltlf = "";
@@ -274,7 +304,8 @@ namespace Syft {
             int split_index = action_reaction_name.find("_REACT");
 
             std::string reaction_name = action_reaction_name.substr(split_index);
-            std::string action_name = boost::replace_all_copy(action_reaction_name, reaction_name, "");
+            // std::string action_name = boost::replace_all_copy(action_reaction_name, reaction_name, "");
+            std::string action_name = replace_all(action_reaction_name, reaction_name, "");
 
             act.set_agent_ltlf(action_name_to_ltlf[action_name]);
             act.set_env_ltlf(reaction_name_to_ltlf[reaction_name]);
@@ -320,7 +351,7 @@ namespace Syft {
 
         for (const auto& act : actions_) {
             auto act_add_list = act.get_add_list();
-            auto act_del_list = act.get_del_list(); 
+            auto act_del_list = act.get_del_list();
             for (const auto& id : act_add_list) {
                 // debug
                 // std::cout << "Action: " << act.get_action_name() << ". Added to var " << vars_[id] << " LTLf add list" << std::endl;
@@ -344,10 +375,10 @@ namespace Syft {
         // construct bdds in transition function
         // std::cout << "constructing BDDs of vars in transition function... " << std::flush;
         for (int i = 0; i < vars_.size(); ++i) {
-            std::string var_ltlf_transition = "(X(" + vars_[i] + ") <-> ((" + vars_[i] + " && !" + del_ltlf[i] + ") || (" + add_ltlf[i] + ")))";  
+            std::string var_ltlf_transition = "(X(" + vars_[i] + ") <-> ((" + vars_[i] + " && !" + del_ltlf[i] + ") || (" + add_ltlf[i] + ")))";
             transition_function += var_ltlf_transition + " && ";
             // debug
-            // std::cout << "Variable: " << vars_[i] << ". LTLf frame axiom: " << var_ltlf_transition << std::endl; 
+            // std::cout << "Variable: " << vars_[i] << ". LTLf frame axiom: " << var_ltlf_transition << std::endl;
         }
 
         std::string agent_pre_ltlf = get_ltlf_agent_pre();
@@ -376,7 +407,7 @@ namespace Syft {
             int split_index = action_reaction_name.find("_REACT");
 
             std::string reaction_name = action_reaction_name.substr(split_index);
-            std::string action_name = boost::replace_all_copy(action_reaction_name, reaction_name, "");
+            std::string action_name = replace_all(action_reaction_name, reaction_name, "");
 
             if (added_action_names.find(action_name) == added_action_names.end()) { // action name has not been added to agent pre
                 added_action_names.insert(action_name);
@@ -394,7 +425,7 @@ namespace Syft {
             }
         }
         if (agent_pre_ltlf == "") return "true";
-        else return "(" + agent_pre_ltlf.substr(0, agent_pre_ltlf.size() -4) + ")"; 
+        else return "(" + agent_pre_ltlf.substr(0, agent_pre_ltlf.size() -4) + ")";
     }
 
     std::string Domain::get_ltlf_env_pre() const {
@@ -410,19 +441,19 @@ namespace Syft {
                 react_to_legal_acts[env_ltlf] += act.get_agent_ltlf() + " || ";
         }
 
-        for (auto& react : react_to_legal_acts) 
+        for (auto& react : react_to_legal_acts)
             react_to_legal_acts[react.first] = "(" + react_to_legal_acts[react.first].substr(0, react_to_legal_acts[react.first].size() - 4) + ")";
 
         // construct env preconditions bdd with results above
         for (const auto& react_act_ltlf : react_to_legal_acts) {
             std::string react_pre_ltlf = "((" + react_act_ltlf.first + ") -> (" + react_act_ltlf.second + "))" ;
-            env_pre_ltlf += react_pre_ltlf + " && "; 
+            env_pre_ltlf += react_pre_ltlf + " && ";
         }
-        
+
         env_pre_ltlf = "(" + env_pre_ltlf.substr(0, env_pre_ltlf.size() - 4) + ")";
-        return env_pre_ltlf;   
+        return env_pre_ltlf;
     }
-    
+
     SymbolicStateDfa Domain::to_symbolic() {
         // Remember the order of variables
         // (vars, act, react).
@@ -434,13 +465,13 @@ namespace Syft {
         // vars_.size() are vars, with indexes from 0 to vars_.size() - 1;
         // 2 are agent- and environment-error vars
         // state var at index vars_.size() is agent-error var
-        // state var at index vars_.size() + 1 is env-error var 
+        // state var at index vars_.size() + 1 is env-error var
         // std::size_t domain_dfa_id = var_mgr_-> create_state_variables(vars_.size() + 2);
         std::vector<std::string> domain_dfa_vars = vars_;
         domain_dfa_vars.push_back("ag_err");
         domain_dfa_vars.push_back("env_err");
         std::size_t domain_dfa_id = var_mgr_->create_named_state_variables(domain_dfa_vars);
-        
+
 
         // DFA initial state is as domain's
         // plus two 0's denoting that
@@ -452,13 +483,13 @@ namespace Syft {
         // define input and output vars
         // store them in var_mgr_. Use create_named_vars, create_input_vars, create_output_vars
         // assign them to actions (as conjunctions of BDDs)
-        std::pair<std::unordered_set<std::string>, std::unordered_set<std::string>> action_reaction_names 
+        std::pair<std::unordered_set<std::string>, std::unordered_set<std::string>> action_reaction_names
             = get_action_reaction_names();
 
         // debug
         // std::cout << "Action names: " << std::endl;
         // for (const auto& action_name : action_reaction_names.first) std::cout << action_name << std::endl;
-         
+
         // std::cout << "Reaction names: " << std::endl;
         // for (const auto& reaction_name : action_reaction_names.second) std::cout << reaction_name << std::endl;
 
@@ -479,7 +510,7 @@ namespace Syft {
         // std::cout << invariants_bdd_ << std::endl;
 
         // construct output object
-        SymbolicStateDfa symbolic_dfa(var_mgr_, domain_dfa_id, dfa_initial_state, transition_function, final_states); 
+        SymbolicStateDfa symbolic_dfa(var_mgr_, domain_dfa_id, dfa_initial_state, transition_function, final_states);
         // symbolic_dfa.dump_dot("domain_dfa.dot");
 
         // debug. check correctness of constructed symbolic_dfa
@@ -495,7 +526,7 @@ namespace Syft {
         std::unordered_set<int> neg_vars;
         for (const auto& var: inv_vec) {
             if (std::find(vars_.begin(), vars_.end(), var) != vars_.end()) {
-                if (boost::starts_with(var, "!")) neg_vars.insert(var_to_id.at(var));
+                if (starts_with(var, "!")) neg_vars.insert(var_to_id.at(var));
                 else pos_vars.insert(var_to_id.at(var));
             }
         }
@@ -515,7 +546,7 @@ namespace Syft {
             CUDD::BDD mutex(var_mgr_->cudd_mgr()->bddOne());
             for (const auto& var_prime : inv_pos_vars)
                 if (var_prime != var) mutex = mutex * (!state_vars[var_prime]);
-            for (const auto& var_prime_prime : inv_neg_vars) 
+            for (const auto& var_prime_prime : inv_neg_vars)
                 mutex = mutex * state_vars[var_prime_prime];
             inv_bdd = inv_bdd * ((!state_vars[var]) + mutex);
         }
@@ -545,7 +576,7 @@ namespace Syft {
             int split_index = action_reaction_name.find("_REACT");
 
             std::string reaction_name = action_reaction_name.substr(split_index);
-            std::string action_name = boost::replace_all_copy(action_reaction_name, reaction_name, "");
+            std::string action_name = replace_all(action_reaction_name, reaction_name, "");
 
             action_reaction_names.first.insert(action_name);
             action_reaction_names.second.insert(reaction_name);
@@ -559,7 +590,7 @@ namespace Syft {
         if (size == 0) return 1;
         while (size) {
             ++count;
-            size>>=1; 
+            size>>=1;
         }
         return count;
     }
@@ -655,7 +686,7 @@ namespace Syft {
             // action_name_to_bin.insert(std::make_pair(action_name, act_bin_id));
             agent_mutex = agent_mutex + act_bdd; // add action bdd to mutual exclusion agent axiom
             id_to_action_name_.insert(std::make_pair(act_int_id, action_name));
-            ++act_int_id; 
+            ++act_int_id;
         }
         // std::cout << "Done!" << std::flush;
 
@@ -712,7 +743,7 @@ namespace Syft {
             int split_index = action_reaction_name.find("_REACT");
 
             std::string reaction_name = action_reaction_name.substr(split_index);
-            std::string action_name = boost::replace_all_copy(action_reaction_name, reaction_name, "");
+            std::string action_name = replace_all(action_reaction_name, reaction_name, "");
 
             act.set_agent_bdd(action_name_to_bdd[action_name]);
             act.set_env_bdd(reaction_name_to_bdd[reaction_name]);
@@ -729,13 +760,13 @@ namespace Syft {
         // debug
         // std::cout << "(ACTION-REACTION: BDD)" << std::endl;
         // for (const auto& act: actions_) {
-            // std::cout << act.get_action_name() << ": " << act.get_action_bdd() << std::endl; 
+            // std::cout << act.get_action_name() << ": " << act.get_action_bdd() << std::endl;
         // }
 
         // debug
         // std::cout << "Agent mutex axiom: " << agent_mutex << std::endl;
         // std::cout << "Environment mutex axiom: " << env_mutex << std::endl;
- 
+
         return std::make_pair(CUDD::BDD(agent_mutex), CUDD::BDD(env_mutex));
     }
 
@@ -751,7 +782,7 @@ namespace Syft {
         // std::cout << "collecting action-reaction add- and delete-lists..." << std::flush;
         for (const auto& act : actions_) {
             auto act_add_list = act.get_add_list();
-            auto act_del_list = act.get_del_list(); 
+            auto act_del_list = act.get_del_list();
             for (const auto& id : act_add_list) {
                 // debug
                 // std::cout << "Action: " << act.get_action_name() << ". Added to var " << id << " BDD add list" << std::endl;
@@ -768,12 +799,12 @@ namespace Syft {
         // construct bdds in transition function
         // std::cout << "constructing BDDs of vars in transition function... " << std::flush;
         for (int i = 0; i < vars_.size(); ++i) {
-            CUDD::BDD var_bdd = 
+            CUDD::BDD var_bdd =
                 ((var_mgr_->state_variable(automaton_id, i) * !(del_bdds[i])) +
                 (add_bdds[i]));
             transition_function.push_back(var_bdd);
             // debug
-            // std::cout << "Variable: " << i << ". BDD: " << var_bdd << std::endl; 
+            // std::cout << "Variable: " << i << ". BDD: " << var_bdd << std::endl;
         }
         // std::cout << "DONE!" << std::endl;
 
@@ -789,8 +820,8 @@ namespace Syft {
         // std::cout << "Computing environment error BDD..." << std::flush;
         CUDD::BDD env_pre_bdd = get_env_pre(automaton_id);
         // std::cout << "DONE!" << std::endl;
-        
-        
+
+
         // agent reaches error state if, and only if:
         // 1. was previously in agent error state; or
         // 2. violated mutex for agent actions; or
@@ -801,7 +832,7 @@ namespace Syft {
         // 2. violated mutex for environment reactions; or
         // 3. violated reaction preconditions
         CUDD::BDD env_err_bdd = (var_mgr_->state_variable(automaton_id, vars_.size() + 1)) + (!env_mutex) + (!env_pre_bdd);
-    
+
         transition_function.push_back(agent_err_bdd);
         transition_function.push_back(env_err_bdd);
 
@@ -816,13 +847,13 @@ namespace Syft {
         int i = 0;
         for (const auto& act: actions_) {
             std::string action_reaction_name = act.get_action_name();
-            // debug 
+            // debug
             // std::cout << "Current action-reaction number: " << i << ". Name: " << action_reaction_name << std::endl;
 
             int split_index = action_reaction_name.find("_REACT");
 
             std::string reaction_name = action_reaction_name.substr(split_index);
-            std::string action_name = boost::replace_all_copy(action_reaction_name, reaction_name, "");
+            std::string action_name = replace_all(action_reaction_name, reaction_name, "");
 
             if (added_action_names.find(action_name) == added_action_names.end()) { // action name has not been added to agent pre
                 // debug
